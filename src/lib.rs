@@ -5,10 +5,12 @@ use std::any::{Any, TypeId};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+pub type InstanceInit = Box<dyn Fn() -> Box<dyn Any + Send + Sync + 'static> + 'static>;
+
 #[derive(Default)]
 pub struct Container {
-    init: RwLock<HashMap<TypeId, Box<Fn() -> Box<(Any + Send + Sync + 'static)> + 'static>>>,
-    instances: RwLock<HashMap<TypeId, Arc<Box<Any + Send + Sync + 'static>>>>,
+    init: RwLock<HashMap<TypeId, InstanceInit>>,
+    instances: RwLock<HashMap<TypeId, Arc<Box<dyn Any + Send + Sync + 'static>>>>,
 }
 
 impl std::fmt::Debug for Container {
@@ -16,14 +18,14 @@ impl std::fmt::Debug for Container {
         f.debug_struct("Container")
             .field(
                 "init",
-                &(&*self.init.read())
+                &(*self.init.read())
                     .keys()
                     .map(|k| format!("{:?}", k))
                     .collect::<Vec<String>>(),
             )
             .field(
                 "instances",
-                &(&*self.instances.read())
+                &(*self.instances.read())
                     .keys()
                     .map(|k| format!("{:?}", k))
                     .collect::<Vec<String>>(),
@@ -36,7 +38,7 @@ impl Container {
     pub fn add<T, C>(&self, factory: C) -> &Self
     where
         T: Any + Send + Sync + 'static,
-        C: Fn() -> Box<Any + Send + Sync + 'static> + 'static,
+        C: Fn() -> Box<dyn Any + Send + Sync + 'static> + 'static,
     {
         self.init.write().insert(TypeId::of::<T>(), Box::new(factory));
 
@@ -52,7 +54,7 @@ impl Container {
 
             // The unsafe call is sound here because we check the types above
             unsafe {
-                return Arc::clone(&*(instance as *const Any as *const Arc<Box<T>>));
+                return Arc::clone(&*(instance as *const dyn Any as *const Arc<Box<T>>));
             }
         }
 
